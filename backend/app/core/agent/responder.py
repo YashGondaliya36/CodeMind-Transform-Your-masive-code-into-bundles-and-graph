@@ -71,14 +71,15 @@ def _answer_direct(request: ChatRequest, files_scanned: int) -> ChatResponse:
         context = "No index file available."
 
     prompt = _build_answer_prompt(request.question, request.repo_name, context)
-    answer = generate_text(prompt, temperature=0.2)
-    tokens_used = count_tokens(prompt + answer)
+    answer, tok_in, tok_out = generate_text(prompt, temperature=0.2)
 
     return ChatResponse(
         answer=answer,
         sources_used=[SourceFile(filename="index.md", title="Project Index", relevance_score=1.0, tags=["overview"])],
         files_scanned=files_scanned,
-        tokens_used=tokens_used,
+        tokens_input=tok_in,
+        tokens_output=tok_out,
+        tokens_used=tok_in + tok_out,
         repo_name=request.repo_name,
         question=request.question,
     )
@@ -93,8 +94,7 @@ def _answer_from_rag(request: ChatRequest, retrieved: list, files_scanned: int) 
 
     context_block = _build_context_block(retrieved, request.repo_name)
     prompt = _build_answer_prompt(request.question, request.repo_name, context_block)
-    answer = generate_text(prompt, temperature=0.3)
-    tokens_used = count_tokens(prompt + answer)
+    answer, tok_in, tok_out = generate_text(prompt, temperature=0.3)
 
     sources = [
         SourceFile(filename=d.filename, title=d.title, relevance_score=s, tags=d.tags)
@@ -102,7 +102,8 @@ def _answer_from_rag(request: ChatRequest, retrieved: list, files_scanned: int) 
     ]
     return ChatResponse(
         answer=answer, sources_used=sources, files_scanned=files_scanned,
-        tokens_used=tokens_used, repo_name=request.repo_name, question=request.question,
+        tokens_input=tok_in, tokens_output=tok_out, tokens_used=tok_in + tok_out,
+        repo_name=request.repo_name, question=request.question,
     )
 
 
@@ -110,7 +111,7 @@ def _answer_from_rag(request: ChatRequest, retrieved: list, files_scanned: int) 
 
 def _answer_agentically(request: ChatRequest, files_scanned: int) -> ChatResponse:
     """Path 3: Full ReAct tool loop — only activated when truly needed."""
-    answer, tool_calls_log, tokens_used = run_agentic_loop(
+    answer, tool_calls_log, tokens_in, tokens_out = run_agentic_loop(
         repo_name=request.repo_name,
         question=request.question,
     )
@@ -127,7 +128,8 @@ def _answer_agentically(request: ChatRequest, files_scanned: int) -> ChatRespons
 
     return ChatResponse(
         answer=answer, sources_used=sources, files_scanned=files_scanned,
-        tokens_used=tokens_used, repo_name=request.repo_name, question=request.question,
+        tokens_input=tokens_in, tokens_output=tokens_out, tokens_used=tokens_in + tokens_out,
+        repo_name=request.repo_name, question=request.question,
     )
 
 
@@ -211,4 +213,6 @@ Question: {question}
 
 Please acknowledge that the knowledge base doesn't have sufficient context for this specific question, and suggest what the user could do (e.g., re-run analysis, check the bundle explorer, or rephrase with different keywords).
 """
-    return generate_text(prompt, temperature=0.1)
+    text, _, _ = generate_text(prompt, temperature=0.1)
+    return text
+

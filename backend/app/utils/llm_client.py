@@ -21,16 +21,17 @@ def _get_client() -> genai.Client:
     return genai.Client(api_key=settings.GEMINI_API_KEY)
 
 
-def generate_text(prompt: str, temperature: float = 0.2) -> str:
+def generate_text(prompt: str, temperature: float = 0.2) -> tuple[str, int, int]:
     """
-    Send a prompt to Gemini and return the plain text response.
+    Send a prompt to Gemini and return the text + token breakdown.
 
     Args:
         prompt:      The full prompt string.
         temperature: Lower = more deterministic. Use 0.2 for code summaries.
 
     Returns:
-        The model's text response as a string.
+        Tuple of (answer_text, input_tokens, output_tokens).
+        Token counts come from usage_metadata — no extra API call needed.
 
     Raises:
         ValueError: If GEMINI_API_KEY is missing.
@@ -43,7 +44,11 @@ def generate_text(prompt: str, temperature: float = 0.2) -> str:
             contents=prompt,
             config=types.GenerateContentConfig(temperature=temperature),
         )
-        return response.text.strip()
+        text = response.text.strip()
+        meta = response.usage_metadata
+        input_tokens = getattr(meta, "prompt_token_count", 0) or 0
+        output_tokens = getattr(meta, "candidates_token_count", 0) or 0
+        return text, input_tokens, output_tokens
     except Exception as e:
         raise RuntimeError(f"LLM call failed: {e}") from e
 
@@ -51,21 +56,14 @@ def generate_text(prompt: str, temperature: float = 0.2) -> str:
 def count_tokens(text: str) -> int:
     """
     Estimate token count for a given text string.
-    Used for transparency reporting in ChatResponse.
+    NOTE: Prefer using usage_metadata from generate_text() instead of calling
+    this directly — it avoids an extra API round-trip.
 
     Returns:
-        Approximate token count (Gemini tokenizer).
+        Approximate token count (rough estimate: 1 token ~= 4 chars).
     """
-    try:
-        client = _get_client()
-        result = client.models.count_tokens(
-            model=settings.GEMINI_MODEL,
-            contents=text,
-        )
-        return result.total_tokens
-    except Exception:
-        # Fallback: rough estimation (1 token ≈ 4 chars)
-        return len(text) // 4
+    # Rough estimation — no extra API call
+    return len(text) // 4
 
 
 def check_connectivity() -> dict:
@@ -78,11 +76,11 @@ def check_connectivity() -> dict:
         {"status": "error", "message": "..."} on failure.
     """
     try:
-        response = generate_text("Say 'ok' and nothing else.", temperature=0.0)
+        response_text, _, _ = generate_text("Say 'ok' and nothing else.", temperature=0.0)
         return {
             "status": "ok",
             "model": settings.GEMINI_MODEL,
-            "response_preview": response[:50],
+            "response_preview": response_text[:50],
         }
     except Exception as e:
         return {"status": "error", "message": str(e)}

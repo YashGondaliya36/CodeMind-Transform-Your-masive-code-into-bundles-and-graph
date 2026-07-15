@@ -49,6 +49,8 @@ class ChatResponse(BaseModel):
     answer: str                             # The LLM's answer
     sources_used: list[SourceFile]          # Which OKF files were injected
     files_scanned: int                      # Total frontmatters scanned (for UI display)
-    tokens_used: Optional[int] = None       # Approximate token usage
+    tokens_input: Optional[int] = None      # Prompt / input tokens consumed
+    tokens_output: Optional[int] = None     # Completion / output tokens generated
+    tokens_used: Optional[int] = None       # Total (kept for backwards compat)
     repo_name: str
     question: str                           # Echo back for frontend convenience

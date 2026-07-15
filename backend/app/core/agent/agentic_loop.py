@@ -119,7 +119,7 @@ Provide your final answer in clear markdown with headers and code blocks where h
 def run_agentic_loop(
     repo_name: str,
     question: str,
-) -> tuple[str, list[dict[str, Any]], int]:
+) -> tuple[str, list[dict[str, Any]], int, int]:
     """
     Run the full ReAct agentic reasoning loop.
 
@@ -128,7 +128,7 @@ def run_agentic_loop(
         question:  The developer's question.
 
     Returns:
-        Tuple of (final_answer, tool_calls_log, total_tokens_used).
+        Tuple of (final_answer, tool_calls_log, tokens_in, tokens_out).
     """
     client = genai.Client(api_key=settings.GEMINI_API_KEY)
     
@@ -143,7 +143,8 @@ def run_agentic_loop(
     ]
     
     tool_calls_log: list[dict[str, Any]] = []
-    total_tokens = 0
+    tokens_in = 0
+    tokens_out = 0
     steps = 0
     
     while steps < MAX_STEPS:
@@ -160,7 +161,8 @@ def run_agentic_loop(
         
         # Track token usage
         if response.usage_metadata:
-            total_tokens += (response.usage_metadata.total_token_count or 0)
+            tokens_in += getattr(response.usage_metadata, "prompt_token_count", 0) or 0
+            tokens_out += getattr(response.usage_metadata, "candidates_token_count", 0) or 0
         
         candidate = response.candidates[0]
         response_content = candidate.content
@@ -180,7 +182,7 @@ def run_agentic_loop(
             final_text = "".join(
                 part.text for part in response_content.parts if part.text
             )
-            return final_text.strip(), tool_calls_log, total_tokens
+            return final_text.strip(), tool_calls_log, tokens_in, tokens_out
         
         # Execute each tool call and collect results
         tool_results: list[types.Part] = []
@@ -232,11 +234,14 @@ def run_agentic_loop(
         ),
     )
     
-    final_text = final_response.text or "The agent could not find a complete answer within the step limit."
     if final_response.usage_metadata:
-        total_tokens += (final_response.usage_metadata.total_token_count or 0)
-    
-    return final_text.strip(), tool_calls_log, total_tokens
+        tokens_in += getattr(final_response.usage_metadata, "prompt_token_count", 0) or 0
+        tokens_out += getattr(final_response.usage_metadata, "candidates_token_count", 0) or 0
+        
+    final_text = "".join(
+        part.text for part in final_response.candidates[0].content.parts if part.text
+    )
+    return final_text.strip(), tool_calls_log, tokens_in, tokens_out
 
 
 # ── Streaming Version ─────────────────────────────────────────────────────────

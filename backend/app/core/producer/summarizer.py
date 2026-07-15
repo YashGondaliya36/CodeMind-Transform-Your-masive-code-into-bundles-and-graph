@@ -43,7 +43,7 @@ def summarize_file(parsed: ParsedFile) -> ModuleSummary:
         ModuleSummary with all fields populated.
     """
     prompt = _build_prompt(parsed)
-    raw_response = generate_text(prompt, temperature=0.2)
+    raw_response, _, _ = generate_text(prompt, temperature=0.2)  # discard tokens, not needed here
     return _parse_llm_response(raw_response, parsed)
 
 
