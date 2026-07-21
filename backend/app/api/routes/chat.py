@@ -122,6 +122,8 @@ async def ask_stream(request: ChatRequest):
                         "message": "Low confidence — escalating to Agent Loop..."
                     })
                     await asyncio.sleep(0.05)
+                    from app.core.agent.responder import _build_context_block
+                    initial_context = _build_context_block(retrieved, request.repo_name)
                 else:
                     yield emit("thinking", {"message": "Synthesizing answer..."})
                     await asyncio.sleep(0.05)
@@ -137,7 +139,7 @@ async def ask_stream(request: ChatRequest):
                 # Stream tool calls from the agentic loop
                 from app.core.agent.agentic_loop import run_agentic_loop_streaming
                 
-                async for event in run_agentic_loop_streaming(request.repo_name, request.question):
+                async for event in run_agentic_loop_streaming(request.repo_name, request.question, initial_context=locals().get("initial_context")):
                     yield emit(event["type"], event)
                     await asyncio.sleep(0.05)
 

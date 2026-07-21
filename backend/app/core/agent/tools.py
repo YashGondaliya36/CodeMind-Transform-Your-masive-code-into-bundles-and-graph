@@ -125,12 +125,73 @@ def follow_import(repo_name: str, import_name: str) -> dict[str, Any]:
     return read_module(repo_name, best_match.filename)
 
 
+# ── Tool 4: Search File Content ─────────────────────────────────────────────────
+
+def search_file_content(repo_name: str, query: str) -> dict[str, Any]:
+    """
+    Search inside the actual contents of all OKF modules for a specific string.
+    Returns lines containing the query to help locate exact function definitions or usages.
+    """
+    import os
+    bundle_path = get_bundle_path(repo_name)
+    if not os.path.exists(bundle_path):
+        return {"error": f"Bundle path not found: {bundle_path}"}
+        
+    results = []
+    
+    # Iterate all .md files
+    for root, _, files in os.walk(bundle_path):
+        for file in files:
+            if not file.endswith(".md"):
+                continue
+            
+            filepath = os.path.join(root, file)
+            # Make path relative to bundle root for clean output
+            rel_path = os.path.relpath(filepath, bundle_path)
+            
+            try:
+                with open(filepath, "r", encoding="utf-8") as f:
+                    lines = f.readlines()
+                    
+                matches = []
+                for i, line in enumerate(lines):
+                    if query.lower() in line.lower():
+                        # Save line number and the stripped text
+                        matches.append({"line": i + 1, "text": line.strip()})
+                        
+                        # Stop after 5 matches per file to prevent blowing up the context window
+                        if len(matches) >= 5:
+                            break
+                            
+                if matches:
+                    results.append({
+                        "filename": rel_path.replace("\\", "/"),
+                        "matches": matches
+                    })
+                    
+                # Stop overall after 10 files
+                if len(results) >= 10:
+                    break
+            except Exception:
+                pass
+                
+    if not results:
+        return {"found": False, "message": f"No occurrences of '{query}' found in bundle contents."}
+        
+    return {
+        "found": True,
+        "summary": f"Found {len(results)} files containing '{query}'.",
+        "results": results
+    }
+
+
 # ── Tool Executor ─────────────────────────────────────────────────────────────
 
 TOOL_REGISTRY = {
     "search_bundle": search_bundle,
     "read_module": read_module,
     "follow_import": follow_import,
+    "search_file_content": search_file_content,
 }
 
 

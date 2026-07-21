@@ -23,6 +23,8 @@ interface AgentEvent {
     sources_used: ChatSource[];
     files_scanned: number;
     tokens_used: number | null;
+    tokens_input: number | null;
+    tokens_output: number | null;
   };
 }
 
@@ -30,7 +32,7 @@ interface ChatMessage {
   role: "user" | "agent";
   content: string;
   sources?: ChatSource[];
-  metrics?: { scanned: number; tokens: number | null };
+  metrics?: { scanned: number; tokens: number | null; tokensIn: number | null; tokensOut: number | null };
   events?: AgentEvent[];
   route?: string;
 }
@@ -128,6 +130,8 @@ export function ChatInterface({ repoName }: ChatInterfaceProps) {
                 metrics: {
                   scanned: event.response.files_scanned,
                   tokens: event.response.tokens_used,
+                  tokensIn: event.response.tokens_input ?? null,
+                  tokensOut: event.response.tokens_output ?? null,
                 },
                 events: [...eventLog],
                 route: eventLog.find(e => e.type === "routing")?.path,
@@ -302,7 +306,7 @@ export function ChatInterface({ repoName }: ChatInterfaceProps) {
                       </div>
                     </div>
 
-                    {/* Sources Only — stats moved to footer bar */}
+                    {/* Sources Only */}
                     {pair.agent.sources && pair.agent.sources.length > 0 && (
                       <div className="px-5 pb-4 border-t-2 border-brutal-black/20 pt-3">
                         <div className="space-y-1">
@@ -316,6 +320,34 @@ export function ChatInterface({ repoName }: ChatInterfaceProps) {
                       </div>
                     )}
 
+                    {/* Metrics Footer for this Bubble */}
+                    {pair.agent.metrics && (
+                      <div className="px-5 py-2 border-t-2 border-brutal-black bg-brutal-black text-white flex items-center flex-wrap gap-x-6 gap-y-2 text-[10px] font-bold uppercase">
+                        <span className="flex items-center gap-1">
+                          <span className="opacity-60">FILES SCANNED</span>
+                          <span className="text-brutal-green">{pair.agent.metrics.scanned}</span>
+                        </span>
+                        {pair.agent.metrics.tokensIn != null && (
+                          <span className="flex items-center gap-1">
+                            <span className="opacity-60">IN</span>
+                            <span className="text-cyan-400">{pair.agent.metrics.tokensIn.toLocaleString()}</span>
+                          </span>
+                        )}
+                        {pair.agent.metrics.tokensOut != null && (
+                          <span className="flex items-center gap-1">
+                            <span className="opacity-60">OUT</span>
+                            <span className="text-yellow-400">{pair.agent.metrics.tokensOut.toLocaleString()}</span>
+                          </span>
+                        )}
+                        {pair.agent.metrics.tokensIn == null && pair.agent.metrics.tokens && (
+                          <span className="flex items-center gap-1">
+                            <span className="opacity-60">TOKENS</span>
+                            <span className="text-yellow-400">{pair.agent.metrics.tokens.toLocaleString()}</span>
+                          </span>
+                        )}
+                      </div>
+                    )}
+
                   </div>
                 </div>
               )}
@@ -324,36 +356,6 @@ export function ChatInterface({ repoName }: ChatInterfaceProps) {
           ))
         )}
       </div>
-
-      {/* ── Sticky Status Footer ─────────────────────────────────────── */}
-      {(() => {
-        const lastAgent = [...messages].reverse().find(m => m.role === "agent");
-        if (!lastAgent?.metrics) return null;
-        return (
-          <div className="shrink-0 border-t-2 border-brutal-black bg-brutal-black text-white px-4 py-1.5 flex items-center gap-6 text-[10px] font-bold uppercase">
-            <span className="opacity-50">LAST QUERY</span>
-            <span className="flex items-center gap-1">
-              <span className="opacity-60">FILES SCANNED</span>
-              <span className="text-brutal-green">{lastAgent.metrics.scanned}</span>
-            </span>
-            {lastAgent.metrics.tokens && (
-              <span className="flex items-center gap-1">
-                <span className="opacity-60">TOKENS USED</span>
-                <span className="text-yellow-400">{lastAgent.metrics.tokens.toLocaleString()}</span>
-              </span>
-            )}
-            {lastAgent.route && (
-              <span className="flex items-center gap-1">
-                <span className="opacity-60">PATH</span>
-                <span className={lastAgent.route === "agentic" ? "text-orange-400" : lastAgent.route === "direct" ? "text-blue-400" : "text-gray-300"}>
-                  {lastAgent.route.toUpperCase()}
-                </span>
-              </span>
-            )}
-            <span className="ml-auto opacity-30">{new Date().toLocaleTimeString()}</span>
-          </div>
-        );
-      })()}
     </div>
   );
 }

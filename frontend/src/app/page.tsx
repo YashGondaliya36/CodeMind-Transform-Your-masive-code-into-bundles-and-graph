@@ -22,27 +22,27 @@ function DashboardContent() {
   }, [activeRepo, repoFromUrl, router]);
 
   return (
-    <main className="min-h-screen p-8 max-w-[1600px] mx-auto">
+    <main className="h-screen p-4 md:p-8 max-w-[1600px] mx-auto flex flex-col overflow-hidden">
       
       {/* HEADER SECTION */}
-      <header className="mb-8 flex items-center justify-between">
+      <header className="shrink-0 mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-5xl font-black uppercase tracking-tighter">CodeMind</h1>
-          <p className="font-mono mt-2 font-bold bg-brutal-green inline-block px-2 py-1 border-2 border-brutal-black">
+          <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tighter">CodeMind</h1>
+          <p className="font-mono mt-1 font-bold bg-brutal-green inline-block px-2 py-1 border-2 border-brutal-black text-xs md:text-sm">
             OKF GENERATOR & BROWSER v1.0
           </p>
         </div>
-        <div className="text-right font-mono font-bold">
+        <div className="text-right font-mono font-bold text-xs md:text-base">
           <p>STATUS: <span className="text-brutal-green drop-shadow-[1px_1px_0_black]">ONLINE</span></p>
           <p>SYSTEM: NOMINAL</p>
         </div>
       </header>
 
       {/* MAIN GRID */}
-      <div className="grid grid-cols-12 gap-8 h-[80vh]">
+      <div className="flex-1 grid grid-cols-12 gap-4 md:gap-8 min-h-0">
         
         {/* LEFT COLUMN: Repo Analysis & File Explorer (4 columns) */}
-        <div className="col-span-4 flex flex-col gap-8 h-full">
+        <div className="col-span-4 flex flex-col gap-4 md:gap-8 h-full min-h-0">
           
           <BrutalistCard className="shrink-0">
             <BrutalistCardHeader>
@@ -66,7 +66,7 @@ function DashboardContent() {
         </div>
 
         {/* RIGHT COLUMN: Graph & Chat (8 columns) */}
-        <div className="col-span-8 flex flex-col gap-8 h-full">
+        <div className="col-span-8 flex flex-col gap-4 md:gap-8 h-full min-h-0">
           
           <BrutalistCard className="h-full flex flex-col">
             <BrutalistCardHeader className="flex flex-row items-center justify-between">

@@ -15,9 +15,12 @@ never enter the agentic loop. Agentify ONLY when required.
 
 from __future__ import annotations
 
-import re
 from enum import Enum
+import json
+from google import genai
+from google.genai import types
 
+from app.config import settings
 
 class RoutePath(str, Enum):
     DIRECT = "direct"     # Use index.md, no search
@@ -25,39 +28,10 @@ class RoutePath(str, Enum):
     AGENTIC = "agentic"   # Full multi-step tool loop
 
 
-# ── Trigger Keywords ──────────────────────────────────────────────────────────
-
-# Questions that always suggest relational traversal / multi-hop reasoning
-_AGENTIC_TRIGGERS = [
-    r"\bhow does .+ (call|use|connect|relate|depend|link|import|interact)\b",
-    r"\bwhat (calls|imports|uses|inherits from|depends on)\b",
-    r"\btrace (the )?(flow|execution|call|path)\b",
-    r"\bfollow (the )?(import|dependency|call)\b",
-    r"\bwhere is .+ (defined|called|used|imported)\b",
-    r"\bconnection between\b",
-    r"\brelationship between\b",
-    r"\bend[- ]to[- ]end\b",
-    r"\bpipeline\b.{0,30}\bhow\b",
-    r"\bstep by step\b",
-    r"\bwalk me through\b",
-    r"\bexplain the full flow\b",
-]
-
-# Questions that are clearly overview/general
-_DIRECT_TRIGGERS = [
-    r"\bwhat (is|does|are) (this|the) (project|repo|codebase|system|app)\b",
-    r"\bgive me an? (overview|summary|intro)\b",
-    r"\bwhat('s| is) the (architecture|structure|purpose)\b",
-    r"\blist (all|the) (modules|files|components)\b",
-    r"\bproject overview\b",
-    r"\bwhat can (this|it|the system) do\b",
-    r"\btell me about (this|the) repo\b",
-]
-
-
 def classify_query(question: str) -> RoutePath:
     """
-    Classify a user question into the cheapest routing path that can answer it.
+    Classify a user question into the cheapest routing path that can answer it
+    using a zero-shot LLM classification.
 
     Args:
         question: The raw user question string.
@@ -65,20 +39,43 @@ def classify_query(question: str) -> RoutePath:
     Returns:
         RoutePath enum value (DIRECT, RAG, or AGENTIC).
     """
-    q_lower = question.lower().strip()
+    try:
+        client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        
+        system_instruction = (
+            "You are an intent router for a code assistant. Classify the user's question into one of three routes:\n"
+            "1. 'DIRECT': High-level overview questions like 'What is this project?', 'Give me a summary', 'List the architecture'.\n"
+            "2. 'AGENTIC': Complex, multi-hop reasoning questions like 'How does X call Y?', 'Trace the flow of...', 'Where is X imported?'.\n"
+            "3. 'RAG': Specific keyword or general code questions that don't fit the above two.\n"
+            "Output ONLY valid JSON containing a single key 'route' with the uppercase string value."
+        )
 
-    # Check agentic triggers first — these REQUIRE multi-hop reasoning
-    for pattern in _AGENTIC_TRIGGERS:
-        if re.search(pattern, q_lower):
-            return RoutePath.AGENTIC
-
-    # Check if it's a high-level overview question — cheapest path
-    for pattern in _DIRECT_TRIGGERS:
-        if re.search(pattern, q_lower):
+        response = client.models.generate_content(
+            model=settings.GEMINI_MODEL,
+            contents=question,
+            config=types.GenerateContentConfig(
+                system_instruction=system_instruction,
+                temperature=0.0,
+                response_mime_type="application/json",
+            )
+        )
+        
+        # Parse response
+        text = response.text or "{}"
+        data = json.loads(text)
+        route_str = data.get("route", "").upper()
+        
+        if route_str == "DIRECT":
             return RoutePath.DIRECT
-
-    # Default: standard 1-shot RAG
-    return RoutePath.RAG
+        if route_str == "AGENTIC":
+            return RoutePath.AGENTIC
+        
+        return RoutePath.RAG
+        
+    except Exception as e:
+        print(f"[Router Warning] LLM routing failed: {e}. Falling back to RAG.")
+        # Fallback to standard RAG if the API call fails
+        return RoutePath.RAG
 
 
 def should_escalate_to_agentic(retrieval_scores: list[float], threshold: float = 0.15) -> bool:

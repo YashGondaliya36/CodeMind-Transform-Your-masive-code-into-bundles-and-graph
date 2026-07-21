@@ -88,6 +88,24 @@ _TOOL_DECLARATIONS = types.Tool(function_declarations=[
             required=["import_name"],
         ),
     ),
+    types.FunctionDeclaration(
+        name="search_file_content",
+        description=(
+            "Search for an exact string (like a function name, class name, or variable) "
+            "inside all markdown files in the bundle. Returns a list of files and line numbers "
+            "where the text appears. Use this to quickly locate where specific code is used or defined."
+        ),
+        parameters=types.Schema(
+            type=types.Type.OBJECT,
+            properties={
+                "query": types.Schema(
+                    type=types.Type.STRING,
+                    description="The exact text to search for inside the file contents."
+                ),
+            },
+            required=["query"],
+        ),
+    ),
 ])
 
 
@@ -102,6 +120,7 @@ You have access to a structured knowledge base (OKF format) containing detailed 
 - **search_bundle**: Find relevant modules by keyword. Use this first when you need to locate a concept.
 - **read_module**: Read the full documentation + source code of a specific module. Use after search_bundle.
 - **follow_import**: Trace a specific Python import to its module. Use when you see an import and need to understand it.
+- **search_file_content**: Find exact string matches (e.g. a function name) across all files. Use when you know what symbol you are looking for but don't know which file it is in.
 
 ## Rules
 1. ONLY call a tool when you genuinely need more information. Do NOT call tools for general questions you already know the answer to.
@@ -109,9 +128,11 @@ You have access to a structured knowledge base (OKF format) containing detailed 
 3. After at most {MAX_STEPS} tool calls, synthesize your final answer based on what you have found.
 4. Be precise: reference exact function names, class names, and file paths in your final answer.
 5. If you cannot find enough context after your searches, say so clearly — do NOT hallucinate.
+6. **CHAIN OF THOUGHT REQUIRED**: Before outputting a tool call or your final answer, you MUST write down your thought process inside `<thought>...</thought>` tags. 
+   - Example: `<thought>I need to find where the auth logic is. I'll use search_bundle.</thought>`
 
 ## Answer Format
-Provide your final answer in clear markdown with headers and code blocks where helpful."""
+Provide your final answer in clear markdown with headers and code blocks where helpful. DO NOT include `<thought>` blocks in your final text answer (only use them when thinking before calling a tool)."""
 
 
 # ── Main Loop ─────────────────────────────────────────────────────────────────
@@ -119,6 +140,7 @@ Provide your final answer in clear markdown with headers and code blocks where h
 def run_agentic_loop(
     repo_name: str,
     question: str,
+    initial_context: str | None = None,
 ) -> tuple[str, list[dict[str, Any]], int, int]:
     """
     Run the full ReAct agentic reasoning loop.
@@ -134,11 +156,15 @@ def run_agentic_loop(
     
     system_prompt = _build_system_prompt(repo_name)
     
+    user_prompt = question
+    if initial_context:
+        user_prompt = f"Initial context retrieved from search:\n{initial_context}\n\nQuestion: {question}"
+
     # Conversation history (multi-turn)
     conversation: list[types.Content] = [
         types.Content(
             role="user",
-            parts=[types.Part(text=question)]
+            parts=[types.Part(text=user_prompt)]
         )
     ]
     
@@ -179,10 +205,12 @@ def run_agentic_loop(
         
         if not function_calls:
             # Model gave a final text answer — we are done!
+            import re
             final_text = "".join(
                 part.text for part in response_content.parts if part.text
             )
-            return final_text.strip(), tool_calls_log, tokens_in, tokens_out
+            final_text = re.sub(r'<thought>.*?</thought>', '', final_text, flags=re.DOTALL).strip()
+            return final_text, tool_calls_log, tokens_in, tokens_out
         
         # Execute each tool call and collect results
         tool_results: list[types.Part] = []
@@ -238,15 +266,17 @@ def run_agentic_loop(
         tokens_in += getattr(final_response.usage_metadata, "prompt_token_count", 0) or 0
         tokens_out += getattr(final_response.usage_metadata, "candidates_token_count", 0) or 0
         
+    import re
     final_text = "".join(
         part.text for part in final_response.candidates[0].content.parts if part.text
     )
-    return final_text.strip(), tool_calls_log, tokens_in, tokens_out
+    final_text = re.sub(r'<thought>.*?</thought>', '', final_text, flags=re.DOTALL).strip()
+    return final_text, tool_calls_log, tokens_in, tokens_out
 
 
 # ── Streaming Version ─────────────────────────────────────────────────────────
 
-async def run_agentic_loop_streaming(repo_name: str, question: str):
+async def run_agentic_loop_streaming(repo_name: str, question: str, initial_context: str | None = None):
     """
     Async generator version of run_agentic_loop.
     Yields SSE-compatible event dicts as the agent reasons and calls tools.
@@ -254,9 +284,12 @@ async def run_agentic_loop_streaming(repo_name: str, question: str):
     """
     client = genai.Client(api_key=settings.GEMINI_API_KEY)
     system_prompt = _build_system_prompt(repo_name)
+    user_prompt = question
+    if initial_context:
+        user_prompt = f"Initial context retrieved from search:\n{initial_context}\n\nQuestion: {question}"
 
     conversation: list[types.Content] = [
-        types.Content(role="user", parts=[types.Part(text=question)])
+        types.Content(role="user", parts=[types.Part(text=user_prompt)])
     ]
 
     steps = 0
@@ -284,8 +317,10 @@ async def run_agentic_loop_streaming(repo_name: str, question: str):
 
         if not function_calls:
             # Model gave final text answer — yield it and stop
+            import re
             final_text = "".join(p.text for p in response_content.parts if p.text)
-            yield {"type": "agent_answer", "message": final_text.strip()}
+            final_text = re.sub(r'<thought>.*?</thought>', '', final_text, flags=re.DOTALL).strip()
+            yield {"type": "agent_answer", "message": final_text}
             return
 
         # Yield each tool call as an event before executing it

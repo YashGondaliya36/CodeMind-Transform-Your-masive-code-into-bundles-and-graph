@@ -48,12 +48,15 @@ def answer_question(request: ChatRequest) -> ChatResponse:
         # Auto-escalate if retrieval confidence is too low
         if should_escalate_to_agentic(scores):
             route = RoutePath.AGENTIC
+            # Save the retrieved files to pass into the Agentic Loop
+            initial_context = _build_context_block(retrieved, request.repo_name)
         else:
             return _answer_from_rag(request, retrieved, files_scanned)
 
     # ── PATH 3: Agentic Loop (only when needed) ────────────────────────────────
     if route == RoutePath.AGENTIC:
-        return _answer_agentically(request, files_scanned)
+        # Pass the context block if we arrived here via RAG escalation
+        return _answer_agentically(request, files_scanned, initial_context=locals().get("initial_context"))
 
     # Fallback (should never reach here)
     return _answer_direct(request, files_scanned)
@@ -109,11 +112,12 @@ def _answer_from_rag(request: ChatRequest, retrieved: list, files_scanned: int) 
 
 # ── Path Handler: Agentic Loop ────────────────────────────────────────────────
 
-def _answer_agentically(request: ChatRequest, files_scanned: int) -> ChatResponse:
+def _answer_agentically(request: ChatRequest, files_scanned: int, initial_context: str | None = None) -> ChatResponse:
     """Path 3: Full ReAct tool loop — only activated when truly needed."""
     answer, tool_calls_log, tokens_in, tokens_out = run_agentic_loop(
         repo_name=request.repo_name,
         question=request.question,
+        initial_context=initial_context,
     )
 
     # Build source list from tool call log (which files were read)
