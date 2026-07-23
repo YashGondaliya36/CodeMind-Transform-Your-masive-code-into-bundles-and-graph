@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.api.routes import health, repo, bundle, chat
+from app.api.routes import health, repo, bundle, chat, mcp
 
 
 # ── Lifespan ─────────────────────────────────────────────────────────────────
@@ -73,6 +73,7 @@ def create_app() -> FastAPI:
     app.include_router(repo.router,   prefix="/repo",   tags=["Repository"])
     app.include_router(bundle.router, prefix="/bundle", tags=["OKF Bundle"])
     app.include_router(chat.router,   prefix="/chat",   tags=["Agent / Chat"])
+    app.include_router(mcp.router,    prefix="/mcp",    tags=["Model Context Protocol (MCP)"])
 
     # ── Global Exception Handler ──────────────────────────────────────────────
     @app.exception_handler(Exception)

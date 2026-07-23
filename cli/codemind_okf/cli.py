@@ -309,9 +309,31 @@ def action(
     ))
 
 
+@app.command()
+def mcp():
+    """
+    [bold green]Start Model Context Protocol (MCP) server over STDIO.[/bold green]
+
+    Connects CodeMind tools natively to Cursor, Claude Desktop, Antigravity, or Zed.
+
+    Example mcp.json config for Cursor / Claude Desktop:
+    {
+      "mcpServers": {
+        "codemind": {
+          "command": "codemind",
+          "args": ["mcp"]
+        }
+      }
+    }
+    """
+    from codemind_okf.mcp import run_mcp_server
+    run_mcp_server()
+
+
 def main():
     app()
 
 
 if __name__ == "__main__":
     main()
+

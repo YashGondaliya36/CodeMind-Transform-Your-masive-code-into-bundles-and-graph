@@ -58,6 +58,26 @@ codemind status
 codemind status /path/to/project
 ```
 
+### `codemind mcp`
+Launches the Model Context Protocol (MCP) server over STDIO.
+
+Connects CodeMind natively to **Cursor**, **Claude Desktop**, **Antigravity**, or **Zed**.
+
+**Add to Cursor / Claude Desktop (`mcp.json`):**
+```json
+{
+  "mcpServers": {
+    "codemind": {
+      "command": "codemind",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Once configured, Cursor or Claude Desktop will automatically call CodeMind tools (`search_bundle`, `read_module`, `get_project_index`, `trace_dependencies`) whenever you ask questions about your codebase!
+
+
 ## How It Works
 
 ```
