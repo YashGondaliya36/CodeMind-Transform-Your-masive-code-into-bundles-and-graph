@@ -10,8 +10,8 @@ interface BundleStatsModalProps {
 
 export function BundleStatsModal({ repoName, files, onClose }: BundleStatsModalProps) {
   // Compute type distribution
-  const typeCounts: Record<string, int> = {};
-  const tagCounts: Record<string, int> = {};
+  const typeCounts: Record<string, number> = {};
+  const tagCounts: Record<string, number> = {};
 
   files.forEach((f) => {
     const type = f.type || "module";

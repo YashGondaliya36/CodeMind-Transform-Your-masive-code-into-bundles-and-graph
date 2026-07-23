@@ -1,0 +1,50 @@
+name: Generate OKF Knowledge Bundle
+
+# Automatically builds the .okf/ knowledge bundle whenever code is pushed.
+# The generated bundle is committed back to the repo so AI IDEs (Cursor,
+# Antigravity, Copilot) can use it as structured codebase context.
+
+on:
+  push:
+    branches: [ main, master ]
+    paths-ignore:
+      - '.okf/**'      # Don't re-trigger on bundle updates themselves
+      - '**.md'
+
+jobs:
+  okf-build:
+    name: Build OKF Knowledge Bundle
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # Needed to commit .okf/ back to the repo
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install CodeMind OKF CLI
+        run: pip install codemind-okf
+
+      - name: Generate OKF bundle
+        run: |
+          codemind index . --overwrite
+          codemind init
+
+      - name: Show bundle stats
+        run: codemind status
+
+      - name: Commit OKF bundle to repository
+        run: |
+          git config user.name  "codemind-bot[bot]"
+          git config user.email "codemind-bot@users.noreply.github.com"
+          git add .okf/ .cursorrules .agents/ .github/copilot-instructions.md || true
+          git diff --staged --quiet || git commit -m "chore(okf): update knowledge bundle [skip ci]"
+          git push
